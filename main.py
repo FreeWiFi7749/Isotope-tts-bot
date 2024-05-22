@@ -34,7 +34,7 @@ logger.addHandler(SessionIDHandler())
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 TOKEN = os.getenv('BOT_TOKEN')
-command_prefix = ['hc/']
+command_prefix = ['cb/']
 main_guild_id = int(os.getenv('MAIN_GUILD_ID'))
 
 class MyBot(commands.AutoShardedBot):
@@ -73,13 +73,10 @@ class MyBot(commands.AutoShardedBot):
         await self.change_presence(activity=discord.Game(name="起動中.."), status=discord.Status.idle)
         await self.load_cogs('cogs')
         await self.tree.sync()
-        if not self.initialized:
-            logging.info("Initializing...")
-            self.initialized = True
-            logging.info('------')
-            logging.info('All cogs have been loaded and bot is ready.')
-            logging.info('------')
-            self.loop.create_task(presence.update_presence(self))
+        logging.info('------')
+        logging.info('All cogs have been loaded and bot is ready.')
+        logging.info('------')
+        self.loop.create_task(presence.update_presence(self))
 
     async def on_ready(self):
         log_data = {
