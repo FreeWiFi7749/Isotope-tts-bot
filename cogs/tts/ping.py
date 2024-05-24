@@ -6,7 +6,7 @@ import os
 
 load_dotenv()
 
-api_url = os.getenv('TTS_MAIN_API_URL')
+api_url = os.getenv('TTS_ISOTOPE_API_URL')
 
 class Ping(commands.Cog):
     def __init__(self, bot):
@@ -14,9 +14,9 @@ class Ping(commands.Cog):
 
     @commands.command(name='ttsping')
     async def ping(self, ctx):
-        API_URL = api_url + '/ping'
+        API_URL = api_url + 'api/v01/ping/'
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(follow_redirects=True) as client:
                 response = await client.get(API_URL)
                 if response.status_code == 200:
                     await ctx.send("API is online!")

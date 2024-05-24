@@ -12,7 +12,7 @@ import sys
 
 from utils import presence
 from utils.logging import save_log
-from utils.error import handle_command_error, handle_application_command_error
+#from utils.error import handle_command_error, handle_application_command_error
 
 load_dotenv()
 
@@ -45,19 +45,12 @@ class MyBot(commands.AutoShardedBot):
 
     async def logo(self):
         logging.info("-" * 15)
-        logging.info("  _____  __      _______ ____             _____ ")
-        logging.info(" / ____| \ \    / /_   _/ __ \      /\   |_   _|")
-        logging.info("| |     __\ \  / /  | || |  | |    /  \    | |  ")
-        logging.info("| |    / _ \ \/ /   | || |  | |   / /\ \   | |  ")
-        logging.info("| |___|  __/\  /   _| || |__| |  / ____ \ _| |_ ")
-        logging.info(" \_____\___| \/   |_____\____/  /_/    \_\_____|")
-        logging.info("-" * 15)
-        logging.info(" _______ _______ _____   ____   ____ _______ ")
-        logging.info("|__   __|__   __/ ____| |  _ \ / __ \__   __|")
-        logging.info("   | |     | | | (___   | |_) | |  | | | |   ")
-        logging.info("   | |     | |  \___ \  |  _ <| |  | | | |   ")
-        logging.info("   | |     | |  ____) | | |_) | |__| | | |   ")
-        logging.info("   |_|     |_| |_____/  |____/ \____/  |_|   ")
+        logging.info(" _  __               _______          __      ")
+        logging.info("| |/ /    _    /\   |_   _\ \        / /\     ")
+        logging.info("| ' /   _| |_ /  \    | |  \ \  /\  / /  \    ")
+        logging.info("|  <   |_   _/ /\ \   | |   \ \/  \/ / /\ \   ")
+        logging.info("| . \    |_|/ ____ \ _| |_   \  /\  / ____ \  ")
+        logging.info("|_|\_\     /_/    \_\_____|   \/  \/_/    \_\ ")
         logging.info("-" * 15)
         logging.info("Authors: FreeWiFi")
         logging.info("-" * 15)
@@ -76,7 +69,7 @@ class MyBot(commands.AutoShardedBot):
         logging.info('------')
         logging.info('All cogs have been loaded and bot is ready.')
         logging.info('------')
-        self.loop.create_task(presence.update_presence(self))
+        await self.loop.create_task(presence.update_presence(self))
 
     async def on_ready(self):
         log_data = {
@@ -108,11 +101,13 @@ class MyBot(commands.AutoShardedBot):
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx, error):
-        await handle_command_error(self, ctx, error)
+        #await handle_command_error(self, ctx, error)
+        pass
 
     @commands.Cog.listener()
     async def on_application_command_error(self, interaction: discord.Interaction, error):
-        await handle_application_command_error(self, interaction, error)
+        #await handle_application_command_error(self, interaction, error)
+        pass
 
 intent: discord.Intents = discord.Intents.all()
 bot = MyBot(command_prefix=command_prefix, intents=intent, help_command=None)

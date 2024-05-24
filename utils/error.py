@@ -1,7 +1,8 @@
-import discord
+"""import discord
 import uuid
 import pytz
 import asyncio
+import logging
 from datetime import datetime
 from discord.ext import commands
 from dotenv import load_dotenv
@@ -9,7 +10,15 @@ import os
 
 load_dotenv()
 
-bug_report_channel_id = int(os.getenv('BUG_REPORT_CHANNEL_ID'))
+error_log_channel_id = "1226305249979928736"
+bug_report_channel_id = "1226498912656031794"
+main_guild_id = "1121697597808181248"
+
+logger = logging.getLogger('discord_bot')
+logger.setLevel(logging.DEBUG)
+handler = logging.StreamHandler()
+handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+logger.addHandler(handler)
 
 class BugReportModal(discord.ui.Modal, title="バグ報告"):
     reason = discord.ui.TextInput(
@@ -107,7 +116,7 @@ async def handle_command_error(bot, ctx, error):
         ctx.handled = True
         return
     if isinstance(error, commands.CommandOnCooldown):
-        await ctx.send(f"このコマンドは{error.retry_after:.2f}秒後に再実行できます。")
+        await ctx.send(f"このコマ���ドは{error.retry_after:.2f}秒後に再実行できます。")
         ctx.handled = True
         return
     
@@ -133,7 +142,25 @@ async def handle_command_error(bot, ctx, error):
             timestamp=now
         )
         e.set_footer(text=f"サーバー: {server_name}")
-        await bot.get_channel(bot.ERROR_LOG_CHANNEL_ID).send(embed=e)
+        
+        guild = bot.get_guild(main_guild_id)
+        if guild is None:
+            if not hasattr(bot, 'main_guild_not_found_logged'):
+                logger.error(f"Main guild with ID {main_guild_id} not found.")
+                bot.main_guild_not_found_logged = True
+            return
+        else:
+            logger.info(f"Main guild found: {guild.name}")
+
+        error_log_channel = guild.get_channel(error_log_channel_id)
+        if error_log_channel is None:
+            if not hasattr(bot, 'error_log_channel_not_found_logged'):
+                logger.error(f"Error log channel with ID {error_log_channel_id} not found in guild {guild.name}.")
+                bot.error_log_channel_not_found_logged = True
+            return
+        else:
+            logger.info(f"Error log channel found: {error_log_channel.name}")
+            await error_log_channel.send(embed=e)
 
         view = BugReportView(bot, str(error_id), str(channel_id), str(server_id), ctx.command.qualified_name if ctx.command else "N/A", server_name)
         if hasattr(ctx, 'interaction') and ctx.interaction:
@@ -200,7 +227,7 @@ async def handle_application_command_error(bot, interaction: discord.Interaction
 
     if not interaction.handled:
         error_id = uuid.uuid4()
-        print(error)
+        logger.error(error)
 
         channel_id = interaction.channel_id
         server_id = interaction.guild_id if interaction.guild else 'DM'
@@ -222,7 +249,24 @@ async def handle_application_command_error(bot, interaction: discord.Interaction
             timestamp=now
         )
         e.set_footer(text=f"サーバー: {server_name}")
-        await bot.get_channel(bot.ERROR_LOG_CHANNEL_ID).send(embed=e)
+        main_guild = bot.get_guild(main_guild_id)
+        if main_guild is None:
+            if not hasattr(bot, 'main_guild_not_found_logged'):
+                logger.error(f"Main guild with ID {main_guild_id} not found.")
+                bot.main_guild_not_found_logged = True
+            return
+        else:
+            logger.info(f"Main guild found: {main_guild.name}")
+
+        error_log_channel = main_guild.get_channel(error_log_channel_id)
+        if error_log_channel is None:
+            if not hasattr(bot, 'error_log_channel_not_found_logged'):
+                logger.error(f"Error log channel with ID {error_log_channel_id} not found in guild {main_guild.name}.")
+                bot.error_log_channel_not_found_logged = True
+            return
+        else:
+            logger.info(f"Error log channel found: {error_log_channel.name}")
+            await error_log_channel.send(embed=e)
 
         es = discord.Embed(
             title="エラーが発生しました",
@@ -243,4 +287,4 @@ async def handle_application_command_error(bot, interaction: discord.Interaction
             await interaction.response.send_message(embed=es, view=view, ephemeral=True)
         except discord.InteractionResponded:
             await interaction.followup.send(embed=es, view=view, ephemeral=True)
-
+"""

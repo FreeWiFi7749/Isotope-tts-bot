@@ -5,7 +5,7 @@ from discord.ext import commands
 from discord import app_commands
 
 BASE_PATH = "data/tts/v00/user-data"
-VOICE_DATA_PATH = "data/tts/v00/voice-data"
+VOICE_DATA_PATH = "data/tts/v01/voice-data"
 
 class UserSettings(commands.Cog):
     def __init__(self, bot):
@@ -21,12 +21,29 @@ class UserSettings(commands.Cog):
         
         with open(setting_file, 'w') as f:
             json.dump({setting_name: value}, f)
+
+    def save_user_voice(self, user_id, voice):
+        if not os.path.exists(BASE_PATH):
+            os.makedirs(BASE_PATH, exist_ok=True)
+        user_path = os.path.join(BASE_PATH, str(user_id))
+        os.makedirs(user_path, exist_ok=True)
+        setting_file = os.path.join(user_path, "voice.json")
+        
+        with open(setting_file, 'w') as f:
+            json.dump({"voice": voice}, f)
     
     def load_user_setting(self, user_id, voice_id, setting_name):
         setting_file = os.path.join(BASE_PATH, str(user_id), str(voice_id), f"{setting_name}.json")
         if os.path.exists(setting_file):
             with open(setting_file, 'r') as f:
                 return json.load(f).get(setting_name)
+        return None
+    
+    def load_user_voice(self, user_id):
+        setting_file = os.path.join(BASE_PATH, str(user_id), "voice.json")
+        if os.path.exists(setting_file):
+            with open(setting_file, 'r') as f:
+                return json.load(f).get('voice')
         return None
 
     def load_voice_data(self):
@@ -43,12 +60,12 @@ class UserSettings(commands.Cog):
     @commands.hybrid_group()
     async def user(self, ctx):
         if ctx.invoked_subcommand is None:
-            await ctx.send('Invalid user command passed...')
+            await ctx.send('無効なユーザーコマンドが渡されました...')
 
     @user.group()
     async def setting(self, ctx):
         if ctx.invoked_subcommand is None:
-            await ctx.send('Invalid setting command passed...')
+            await ctx.send('無効な設定コマンドが渡されました...')
 
     async def voice_autocomplete(self, interaction: discord.Interaction, current: str):
         voices = self.load_voice_data()
@@ -56,37 +73,33 @@ class UserSettings(commands.Cog):
 
     @setting.command(name='speed')
     @app_commands.autocomplete(voice_id=voice_autocomplete)
-    @app_commands.describe(voice_id="The voice to set the speed for", speed="The speed to set")
+    @app_commands.describe(voice_id="速度を設定する音声", speed="設定する速度")
     async def set_speed(self, ctx, voice_id: str, speed: int):
         self.save_user_setting(ctx.author.id, voice_id, 'speed', speed)
-        await ctx.send(f"Speed setting for voice {voice_id} set to {speed}")
+        await ctx.send(f"音声 {voice_id} の速度設定が {speed} に設定されました")
 
     @setting.command(name='pitch')
     @app_commands.autocomplete(voice_id=voice_autocomplete)
-    @app_commands.describe(voice_id="The voice to set the pitch for", pitch="The pitch to set")
+    @app_commands.describe(voice_id="ピッチを設定する音声", pitch="設定するピッチ")
     async def set_pitch(self, ctx, voice_id: str, pitch: int):
         self.save_user_setting(ctx.author.id, voice_id, 'pitch', pitch)
-        await ctx.send(f"Pitch setting for voice {voice_id} set to {pitch}")
-
-    @setting.command(name='emotion')
-    @app_commands.autocomplete(voice_id=voice_autocomplete)
-    @app_commands.describe(voice_id="The voice to set the emotion for", emotion="The emotion to set")
-    async def set_emotion(self, ctx, voice_id: str, emotion: str):
-        self.save_user_setting(ctx.author.id, voice_id, 'emotion', emotion)
-        await ctx.send(f"Emotion setting for voice {voice_id} set to {emotion}")
+        await ctx.send(f"音声 {voice_id} のピッチ設定が {pitch} に設定されました")
 
     @setting.command(name='voice')
-    @app_commands.autocomplete(voice_id=voice_autocomplete)
-    @app_commands.describe(voice_id="The voice to set the voice for", voice="The voice to set")
-    async def set_voice(self, ctx, voice_id: str, voice: str):
-        self.save_user_setting(ctx.author.id, voice_id, 'voice', voice)
-        await ctx.send(f"Voice setting for voice {voice_id} set to {voice}")
+    @app_commands.autocomplete(voice=voice_autocomplete)
+    @app_commands.describe(voice="設定する音声")
+    async def set_voice(self, ctx, voice: str):
+        self.save_user_voice(ctx.author.id, voice)
+        await ctx.send(f"音声設定が {voice} に設定されました")
 
-    @commands.command()
+    @commands.hybrid_command(name="voices", aliases=['v'], description="音声の一覧を表示します。")
     async def voices(self, ctx):
-        voice_list = [f"{vid}: {data['name']}" for vid, data in self.voice_data.items()]
-        await ctx.send("\n".join(voice_list))
-
+        e = discord.Embed(title="利用可能な音声一覧")
+        for vid, data in self.voice_data.items():
+            e.add_field(name=data['name'], value=data['description'], inline=False)
+        e.set_footer(text="音声を設定するには /user setting voice コマンドを使用してください。")
+        e.set_author(name="Powered by VOICEPEAK")
+        await ctx.send(embed=e)
 
 async def setup(bot):
     await bot.add_cog(UserSettings(bot))

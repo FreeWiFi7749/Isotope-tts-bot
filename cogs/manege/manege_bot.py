@@ -13,7 +13,7 @@ from utils import api
 
 load_dotenv()
 
-api_url = os.getenv('TTS_MAIN_API_URL')
+api_url = os.getenv('TTS_ISOTOPE_API_URL')
 
 class ManagementBotCog(commands.Cog):
     def __init__(self, bot):
@@ -67,7 +67,7 @@ class ManagementBotCog(commands.Cog):
         e.add_field(name="Bot Ping", value=f"{bot_ping}ms", inline=True)
 
         # TTS API Ping
-        tts_api_url = api_url + '/ping'
+        tts_api_url = api_url + 'api/v01/ping/'
         try:
             tts_start_time = time.monotonic()
             async with httpx.AsyncClient() as client:
