@@ -10,13 +10,14 @@ import platform
 import ctypes.util
 import re
 import alkana
+import time
 
 from discord.ext import commands
 from discord import app_commands
 from dotenv import load_dotenv
 
 from cogs.tts.user_setting import UserSettings
-from utils.join_message import join_message
+from utils.join_message import join_message, leave_message
 from cogs.tts.global_dic import GlobalDicCog
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %Y-%m-%d %H:%M:%S - %(message)s')
@@ -24,6 +25,7 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %Y-%m-%d %H:%M:%S
 load_dotenv()
 
 BASE_PATH = "data/tts/v00/user-data"
+STATS_PATH = "data/tts/v00/stats"
 
 api_url = os.getenv('TTS_ISOTOPE_API_URL')
 
@@ -54,6 +56,34 @@ class TTS(commands.Cog):
                 discord.opus.load_opus(opus_path)
             else:
                 raise RuntimeError('Opus library not found')
+
+        self.stats = {
+            "command": self.load_stats("command.json"),
+            "vc": self.load_stats("vc.json"),
+            "message": self.load_stats("message.json"),
+            "error": self.load_stats("error.json")
+        }
+
+    def load_stats(self, filename):
+        if not os.path.exists(STATS_PATH):
+            os.makedirs(STATS_PATH, exist_ok=True)
+        filepath = os.path.join(STATS_PATH, filename)
+        if os.path.exists(filepath):
+            with open(filepath, 'r') as f:
+                return json.load(f)
+        return {"count": 0}
+
+    def save_stats(self, filename, data):
+        logging.debug(f"Saving stats to file: {filename}")
+        filepath = os.path.join(STATS_PATH, filename)
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        with open(filepath, 'w') as f:
+            json.dump(data, f)
+
+    def increment_stat(self, stat_type):
+        logging.debug(f"Incrementing stat: {stat_type}")
+        self.stats[stat_type]["count"] += 1
+        self.save_stats(f"{stat_type}.json", self.stats[stat_type])
 
     def load_whitelist(self):
         if os.path.exists(self.whitelist_file):
@@ -103,35 +133,58 @@ class TTS(commands.Cog):
         return None
     
     async def leave_vc(self, ctx):
-        if self.voice_channel:            
+        if self.voice_channel:
+            vc = self.voice_channel.channel
+            eff = discord.Embed(title="切断中", description=f"{vc} から切断します。")
+            msgGG = await ctx.send(embed=eff)
+            payload = {
+                'narrator': self.user_settings.load_user_voice(ctx.author.id),
+                'text': f"{vc}から切断します。",
+                'temperature': 0
+            }
+            await leave_message(api_url, payload, ctx, self)
+            while self.voice_channel.is_playing():
+                await asyncio.sleep(1)
             await self.voice_channel.disconnect(force=True)
             self.voice_channel = None
             self.active_channel = None
-            await ctx.send("ボイスチャンネルから切断しました。")
-            logging.info("Disconnected from voice channel.")
+            es = discord.Embed(title="切断しました", description=f"{vc} から切断しました。")
+            await msgGG.edit(embed=es)
         else:
             await ctx.send("現在接続しているボイスチャンネルがありません。")
-            logging.warning("Attempted to leave voice channel without beingve voice channel without being connected.")
 
     async def join_vc(self, ctx: commands.Context):
         if ctx.author.voice:
             vc = ctx.author.voice.channel
             logging.info(f"Joined voice channel: {vc.name}")
-            e = discord.Embed(title="接続中", description=f"{vc.name} に接続しています。")
-            msg = await ctx.send(embed=e)
+            ef = discord.Embed(title="接続中", description=f"{vc.name} に接続しています。")
+            msg_j = await ctx.send(embed=ef)
             payload = {
                 'narrator': self.user_settings.load_user_voice(ctx.author.id),
                 'text': f"{vc.name}に接続しました。",
                 'temperature': 0
             }
-
             self.bot.loop.create_task(join_message(api_url, payload, ctx, self))
             self.voice_channel = await vc.connect()
             self.active_channel = ctx.channel
-            pong = await self.bot.ws.ping()
-            e = discord.Embed(title="接続しました", description=f"- 接続したボイスチャンネル: {vc.mention}\n\n- 接続状況: {pong}ms")
-            await msg.edit(embed=e)
+            tts_api_url = api_url + 'api/v01/ping/'
+            try:
+                tts_start_time = time.monotonic()
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(tts_api_url)
+                tts_end_time = time.monotonic()
+                tts_api_ping = round((tts_end_time - tts_start_time) * 1000)
+                if response.status_code == 200:
+                    tts_api_status = "API is online!"
+                else:
+                    tts_api_status = f"API responded with status code {response.status_code}"
+            except Exception as e:
+                tts_api_status = f"Failed to reach API: {e}"
 
+
+            es = discord.Embed(title="接続しました", description=f"- 接続したボイスチャンネル: {vc.mention}\n\n- 接続状況: {tts_api_ping}ms")
+            await msg_j.edit(embed=es)
+            self.increment_stat("vc")
         else:
             await ctx.send("ボイスチャンネルに接続している必要があります。")
             logging.warning("Attempted to join voice channel without being in a voice channel.")
@@ -146,14 +199,12 @@ class TTS(commands.Cog):
             await self.play_next_in_queue()
 
     async def process_message(self, message):
-        logging.info("process_message called")  # 追加
+        logging.info("process_message called")
         if isinstance(message, str):
-            # 文字列メッセージの処理
             user_id = None
             voice_id = self.user_settings.load_user_voice(message.author.id)
             text = message
         else:
-            # discord.Messageオブジェクトの処理
             user_id = message.author.id
             voice_id = self.user_settings.load_user_voice(user_id)
             text = message.content
@@ -161,10 +212,11 @@ class TTS(commands.Cog):
         if text is None:
             logging.error("Message content is None.")
             return
+        
+        if voice_id == None:
+            voice_id = "SEKAI"
 
-        #logging.debug(f"Original text before alkana: {text}")
         kana_text = alkana.get_kana(text)
-        #logging.debug(f"Text after alkana: {kana_text}")
         
         if kana_text:
             result = self.kakasi.convert(kana_text)
@@ -175,51 +227,40 @@ class TTS(commands.Cog):
         if not kana_text:
             logging.error("Failed to convert text to kana.")
             kana_text = text
-        
-        #logging.debug(f"Original text: {text}")
-        #logging.debug(f"Kana text: {kana_text}")
 
         payload = {
             'text': kana_text,
-            'narrator': voice_id,  # デフォルトのvoice_idを使用
+            'narrator': voice_id,
             'temperature': 0
         }
-
-        #logging.debug(f"Sending payload: {payload}")
 
         timeout = None
         async with httpx.AsyncClient(follow_redirects=True, timeout=timeout) as client:
             try:
-                #logging.debug("Sending request to TTS API")  # 追加
                 response = await client.post(
                     f"{api_url}api/v01/generate_speech/",
                     json=payload
                 )
-                #logging.debug(f'{response.status_code} {response.url}')
-                #logging.debug("Received response from TTS API")  # 追加
 
                 if response.status_code == 200:
                     response_data = response.json()
                     audio_url = response_data.get('audio_url')
                     if audio_url:
-                        #logging.debug(f"Audio URL: {audio_url}")
-                        
                         dl_response = await client.get(f"{api_url}{audio_url}")
-                        #logging.debug(f"Download response status: {dl_response.status_code}")  # 追加
                         if dl_response.status_code == 200:
                             fd, tmp_path = tempfile.mkstemp()
                             with os.fdopen(fd, 'wb') as tmp:
                                 tmp.write(dl_response.content)
-                            #logging.debug(f"Downloaded file path: {tmp_path}")
 
                             if os.path.exists(tmp_path):
                                 await self.queue.put(tmp_path)
                                 if not self.currently_playing:
                                     await self.play_next_in_queue()
+                                self.increment_stat("message")
                             else:
                                 logging.error(f"File not found: {tmp_path}")
                                 if message.channel:
-                                    await message.channel.send("���ウンロードしたファイルが見つかりませんでした。")
+                                    await message.channel.send("ダウンロードしたファイルが見つかりませんでした。")
                         else:
                             logging.error(f"Failed to download file: {dl_response.status_code}")
                             if message.channel:
@@ -233,16 +274,18 @@ class TTS(commands.Cog):
                     error_message = response.json().get('message')
                     if message.channel:
                         await message.channel.send(f"音声合成に失敗しました: {str(response.status_code)} {error_message}")
+                    self.increment_stat("error")
             except httpx.ReadTimeout:
                 logging.error("Request timed out")
                 if message.channel:
                     await message.channel.send("リクエストがタイムアウトしました。")
+                self.increment_stat("error")
             except Exception as e:
                 logging.error(f"An error occurred: {e}")
                 if message.channel:
                     await message.channel.send("エラーが発生しました。")
+                self.increment_stat("error")
             finally:
-                #logging.debug("Finished processing message")  # 追加
                 pass
 
     def reset_playing_state(self):
@@ -253,7 +296,7 @@ class TTS(commands.Cog):
     async def join(self, ctx):
         await self.join_vc(ctx)
 
-    @commands.hybrid_command(name="leave", aliases=['l'], description="ボイスチャンネルから切断します。")
+    @commands.hybrid_command(name="leave", aliases=['l'], description="ボイスチャンルから切断します。")
     async def leave(self, ctx):
         await self.leave_vc(ctx)
 
@@ -269,7 +312,7 @@ class TTS(commands.Cog):
             await ctx.send("現在再生中の音声はありません。")
             logging.warning("Attempted to skip playback when nothing is playing.")
 
-# Whitelist commands
+    # Whitelist commands
     @commands.hybrid_group(name="whitelist", aliases=['wl'], description="ホワイトリスト管理します。")
     async def whitelist(self, ctx):
         pass
@@ -286,7 +329,7 @@ class TTS(commands.Cog):
     async def remove(self, ctx, user: discord.User):
         self.whitelisted_users.discard(user.id)
         self.save_whitelist()
-        await ctx.send(f"{user.name} をホワイトリストから除しました。")
+        await ctx.send(f"{user.name} をホワイトリストから削除しました。")
 
     @whitelist.command(name="list", aliases=['l'], description="ホワイトリストのユーザーを一覧表示します。")
     async def list(self, ctx):
@@ -305,6 +348,8 @@ class TTS(commands.Cog):
 
         if message.author.id not in self.whitelisted_users:
             return
+        if message.content.startswith("cb/"):
+            return
 
         if isinstance(message.author, discord.Member):
             if self.active_channel and message.channel == self.active_channel:
@@ -313,6 +358,16 @@ class TTS(commands.Cog):
                         self.voice_channel = await message.author.voice.channel.connect()
                     
                     #logging.debug(f"Message content before processing: {message.content}")
+
+                    hiragana_dict = {
+                        "お兄ちゃん": "おにいちゃん",
+                    }
+
+                    modified_message = message
+                    for word, hiragana in hiragana_dict.items():
+                        modified_message.content = modified_message.content.replace(word, hiragana)
+
+                    await self.queue.put(modified_message)
 
                     if message.attachments:
                         for attachment in message.attachments:
@@ -337,14 +392,13 @@ class TTS(commands.Cog):
                                     modified_message = message
                                     modified_message.content = read_text
                                     await self.queue.put(modified_message)
-                                    break
-                            else:
-                                if any(url in message.content for url in ["http://", "https://"]):
-                                    modified_message = message
-                                    modified_message.content = "URL省略"
-                                    await self.queue.put(modified_message)
-                                else:
-                                    await self.queue.put(message)"""
+                                    break"""
+                            
+                    if any(url in message.content for url in ["http://", "https://"]):
+                        modified_message = message
+                        modified_message.content = "URL省略"
+                        await self.queue.put(modified_message)
+
                     else:
                         await self.queue.put(message)
                     
@@ -360,9 +414,16 @@ class TTS(commands.Cog):
                 pass
 
     @commands.Cog.listener()
-    async def unload(self):
-        if self.voice_channel:
-            await self.voice_channel.disconnect()
+    async def on_voice_state_update(self, member, before, after):
+        logging.debug(f"Voice state update: {member.name}, before: {before.channel}, after: {after.channel}")
+        if after.channel and self.voice_channel and after.channel == self.voice_channel:
+            self.whitelisted_users.add(member.id)
+            self.save_whitelist()
+            logging.info(f"{member.name} をホワイトリストに追加しました。")
+        elif before.channel and self.voice_channel and before.channel == self.voice_channel and not after.channel:
+            self.whitelisted_users.discard(member.id)
+            self.save_whitelist()
+            logging.info(f"{member.name} をホワイトリストから削除しました。")
 
 async def setup(bot):
     user_settings = UserSettings(bot)
