@@ -3,10 +3,10 @@ import tempfile
 import os
 import logging
 
-async def join_message(api_url, payload, ctx, self):
+async def process_message(api_url, payload, ctx, self, endpoint):
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.post(f"{api_url}api/v01/startup/", json=payload)
+            response = await client.post(f"{api_url}{endpoint}", json=payload)
             if response.status_code == 200:
                 response_data = response.json()
                 audio_url = response_data.get('audio_url')
@@ -17,7 +17,7 @@ async def join_message(api_url, payload, ctx, self):
                         with os.fdopen(fd, 'wb') as tmp:
                             tmp.write(dl_response.content)
                         if os.path.exists(tmp_path):
-                            await self.queue.put(tmp_path)
+                            self.queue.append(tmp_path)  # 修正: itemではなくtmp_pathを追加
                             if not self.currently_playing:
                                 await self.play_next_in_queue()
                         else:
@@ -39,33 +39,8 @@ async def join_message(api_url, payload, ctx, self):
             logging.error(f"An error occurred: {e}")
             await ctx.send("エラーが発生しました。")
 
+async def join_message(api_url, payload, ctx, self):
+    await process_message(api_url, payload, ctx, self, "api/v01/startup/")
 
 async def leave_message(api_url, payload, ctx, self):
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.post(f"{api_url}api/v01/startup/", json=payload)
-            if response.status_code == 200:
-                response_data = response.json()
-                audio_url = response_data.get('audio_url')
-                if audio_url:
-                    dl_response = await client.get(f"{api_url}{audio_url}")
-                    if dl_response.status_code == 200:
-                        fd, tmp_path = tempfile.mkstemp()
-                        with os.fdopen(fd, 'wb') as tmp:
-                            tmp.write(dl_response.content)
-                        if os.path.exists(tmp_path):
-                            await self.queue.put(tmp_path)
-                            if not self.currently_playing:
-                                await self.play_next_in_queue()
-                        else:
-                            await ctx.send("ダウンロードしたファイルが見つかりませんでした。")
-                    else:
-                        await ctx.send("ファイルのダウンロードに失敗しました。")
-                else:
-                    await ctx.send("レスポンスにAudio URLが含まれていません。")
-            else:
-                await ctx.send(f"音声合成に失敗しました: {response.status_code}")
-        except httpx.RequestError as e:
-            await ctx.send("リクエスト中にエラーが発生しました。")
-        except Exception as e:
-            await ctx.send("エラーが発生しました。")
+    await process_message(api_url, payload, ctx, self, "api/v01/shutdown/")

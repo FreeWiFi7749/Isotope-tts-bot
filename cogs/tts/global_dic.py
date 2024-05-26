@@ -63,6 +63,7 @@ class GlobalDicCog(commands.Cog):
 
     @global_dic.command(name='add_url', aliases=['au'], description='Add url to global dic')
     @app_commands.describe(url='指定した読み方にするURL', 読み方='読み方')
+    @commands.is_owner()
     async def add_url(self, ctx, url: str, 読み方: str):
         if url.startswith('https://') or url.startswith('http://'): 
             domain = f"{url.replace('https://', '').replace('http://', '').split('/')[0]}"
@@ -77,6 +78,7 @@ class GlobalDicCog(commands.Cog):
 
     @global_dic.command(name='add_text', aliases=['at'], description='Add text to global dic')
     @app_commands.describe(text='指定した読み方にする単語', 読み方='読み方')
+    @commands.is_owner()
     async def add_text(self, ctx, text: str, 読み方: str):
         text = re.sub(r'\s+', '', text.lower())
 
@@ -86,4 +88,4 @@ class GlobalDicCog(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(GlobalDicCog(bot))
-    logging.info("GlobalDicCogがセットアップされました")
+    #logging.info("GlobalDicCogがセットアップされました")

@@ -14,6 +14,7 @@ class TTSStory(commands.Cog):
         self.bot = bot
 
     @commands.hybrid_command(name="gs")
+    @commands.is_owner()
     async def generate_story(self, ctx):
         async with httpx.AsyncClient() as client:
             first_msg = await ctx.send("ストーリーを生成しています。しばらくお待ちください。")
