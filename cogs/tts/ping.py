@@ -8,7 +8,7 @@ load_dotenv()
 
 api_url = os.getenv('TTS_ISOTOPE_API_URL')
 
-class Ping(commands.Cog):
+class PingCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
@@ -26,5 +26,4 @@ class Ping(commands.Cog):
             await ctx.send(f"Failed to reach API: {e}")
 
 async def setup(bot):
-    await bot.add_cog(Ping(bot))
-
+    await bot.add_cog(PingCog(bot))

@@ -9,6 +9,8 @@ import aiohttp
 
 from dotenv import load_dotenv
 
+from utils.error import handle_command_error, handle_application_command_error
+
 load_dotenv()
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 
@@ -27,10 +29,11 @@ def save_json(data, file_path):
     with open(file_path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
-class TesterRecruitment(commands.Cog):
+class TesterRecruitmentCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.allowed_users = [123456789012345678, 987654321098765432]  # 許可されたユーザーIDのリスト
+        self.allowed_users = [123456789012345678, 987654321098765432]
+        self.bot.tree.on_error = handle_application_command_error
 
     @app_commands.command(name="tester_recruitment", description="テスター募集を開始します")
     async def tester_recruitment(self, interaction: discord.Interaction, 人数: int, ch: discord.TextChannel):
@@ -91,5 +94,9 @@ class TesterRecruitment(commands.Cog):
                 save_json(active_msg, 'data/tts/h_s/tester/inactive/msg.json')
                 os.remove('data/tts/h_s/tester/active/msg.json')
 
+    @tester_recruitment.error
+    async def tester_recruitment_error(self, interaction, error):
+        await handle_application_command_error(self.bot, interaction, error)
+
 async def setup(bot):
-    await bot.add_cog(TesterRecruitment(bot))
+    await bot.add_cog(TesterRecruitmentCog(bot))

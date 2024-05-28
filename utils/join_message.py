@@ -17,9 +17,10 @@ async def process_message(api_url, payload, ctx, self, endpoint):
                         with os.fdopen(fd, 'wb') as tmp:
                             tmp.write(dl_response.content)
                         if os.path.exists(tmp_path):
-                            self.queue.append(tmp_path)  # 修正: itemではなくtmp_pathを追加
-                            if not self.currently_playing:
-                                await self.play_next_in_queue()
+                            guild_id = ctx.guild.id
+                            self.queues[guild_id].append(tmp_path)
+                            if not self.currently_playing[guild_id]:
+                                await self.play_next_in_queue(guild_id)
                         else:
                             logging.error(f"File not found: {tmp_path}")
                             await ctx.send("ダウンロードしたファイルが見つかりませんでした。")

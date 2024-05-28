@@ -85,5 +85,27 @@ class ManagementBotCog(commands.Cog):
         e.add_field(name="TTS API Status", value=tts_api_status, inline=True)
         await sent_message.edit(embed=e)
 
+    @commands.command(name='shutdown', hidden=True)
+    @commands.is_owner()
+    async def shutdown(self, ctx):
+        """Botを終了します"""
+        await ctx.send("Botを終了します。")
+        await self.bot.close()
+
+
+    @restart.error
+    async def restart_error(self, ctx, error):
+        if isinstance(error, commands.NotOwner):
+            await ctx.send("このコマンドを使用する権限がありません。", ephemeral=True)
+        else:
+            await ctx.send(f"エラーが発生しました: {error}", ephemeral=True)
+
+    @ping.error
+    async def ping_error(self, ctx, error):
+        if isinstance(error, commands.NotOwner):
+            await ctx.send("このコマンドを使用する権限がありません。", ephemeral=True)
+        else:
+            await ctx.send(f"エラーが発生しました: {error}", ephemeral=True)
+
 async def setup(bot):
     await bot.add_cog(ManagementBotCog(bot))

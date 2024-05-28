@@ -75,7 +75,7 @@ class ManagementCog(commands.Cog):
 
         if hasattr(self.bot, 'failed_cogs') and self.bot.failed_cogs:
             failed_cogs_list = [f'{cog}: {error}' for cog, error in self.bot.failed_cogs.items()]
-            e_failed_cogs = discord.Embed(title="正常に読み込��なかったCogファイル一覧", color=discord.Color.red())
+            e_failed_cogs = discord.Embed(title="正常に読み込めなかったCogファイル一覧", color=discord.Color.red())
             e_failed_cogs.add_field(name="Failed Cogs", value='\n'.join(failed_cogs_list), inline=False)
         else:
             e_failed_cogs = discord.Embed(title="正常に読み込めなかったCogファイル一覧", color=discord.Color.green())

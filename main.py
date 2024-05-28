@@ -9,10 +9,10 @@ from datetime import datetime
 import logging
 import traceback
 import sys
+import colorlog
 
 from utils import presence
 from utils.logging import save_log
-#from utils.error import handle_command_error, handle_application_command_error
 
 load_dotenv()
 
@@ -31,7 +31,24 @@ logger = logging.getLogger('discord.gateway')
 logger.setLevel(logging.INFO)
 logger.addHandler(SessionIDHandler())
 
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+# Colorlogの設定
+handler = colorlog.StreamHandler()
+handler.setFormatter(colorlog.ColoredFormatter(
+    "%(log_color)s%(asctime)s - %(levelname)s - %(message)s",
+    datefmt=None,
+    reset=True,
+    log_colors={
+        'DEBUG': 'cyan',
+        'WARNING': 'yellow',
+        'ERROR': 'red',
+        'CRITICAL': 'red,bg_white'
+    }
+))
+
+# 既存のハンドラをクリアしてから新しいハンドラを追加
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.DEBUG)
+root_logger.handlers = [handler]
 
 TOKEN = os.getenv('BOT_TOKEN')
 command_prefix = ['cb/']
@@ -44,31 +61,37 @@ class MyBot(commands.AutoShardedBot):
         self.cog_classes = {}
 
     async def logo(self):
-        logging.info("-" * 15)
-        logging.info(" _  __               _______          __      ")
-        logging.info("| |/ /    _    /\   |_   _\ \        / /\     ")
-        logging.info("| ' /   _| |_ /  \    | |  \ \  /\  / /  \    ")
-        logging.info("|  <   |_   _/ /\ \   | |   \ \/  \/ / /\ \   ")
-        logging.info("| . \    |_|/ ____ \ _| |_   \  /\  / ____ \  ")
-        logging.info("|_|\_\     /_/    \_\_____|   \/  \/_/    \_\ ")
-        logging.info("-" * 15)
-        logging.info("Authors: FreeWiFi")
-        logging.info("-" * 15)
-        logging.info("discord.py: v%s", discord.__version__)
-        logging.info("Python: v%s", '.'.join(map(str, sys.version_info[:3])))
+        logo_log = logging.getLogger('logo')
+        logo_log.debug("┌──────────────────────────────────────────────────────────────────────────┐")
+        logo_log.debug("│                                                                          │")
+        logo_log.debug("├──────────────────────────────────────────────────────────────────────────│")
+        logo_log.debug("│      _/    _/     _/         _/_/     _/_/_/   _/          _/     _/_/   │")
+        logo_log.debug("│     _/  _/       _/       _/    _/     _/     _/          _/   _/    _/  │")
+        logo_log.debug("│    _/_/     _/_/_/_/_/   _/_/_/_/     _/     _/    _/    _/   _/_/_/_/   │")
+        logo_log.debug("│   _/  _/       _/       _/    _/     _/       _/  _/  _/     _/    _/    │")
+        logo_log.debug("│  _/    _/     _/       _/    _/   _/_/_/       _/  _/       _/    _/     │")
+        logo_log.debug("├──────────────────────────────────────────────────────────────────────────│")
+        logo_log.debug("│                             K+AIWA                                       │")
+        logo_log.debug("├──────────────────────────────────────────────────────────────────────────│")
+        logo_log.debug("│                        Authors: FreeWiFi                                 │")
+        logo_log.debug("├──────────────────────────────────────────────────────────────────────────│")
+        logo_log.debug("│                         discord.py: v%s                              |", discord.__version__)
+        logo_log.debug("│                           Python: v%s                                |", '.'.join(map(str, sys.version_info[:3])))
+        logo_log.debug("└──────────────────────────────────────────────────────────────────────────┘")
 
     async def setup_hook(self):
         self.loop.create_task(self.after_ready())
 
     async def after_ready(self):
+        logo_log = logging.getLogger('logo')
         await self.wait_until_ready()
         await self.logo()
         await self.change_presence(activity=discord.Game(name="起動中.."), status=discord.Status.idle)
         await self.load_cogs('cogs')
         await self.tree.sync()
-        logging.info('------')
-        logging.info('All cogs have been loaded and bot is ready.')
-        logging.info('------')
+        logo_log.debug('------')
+        logo_log.debug('All cogs have been loaded and bot is ready.')
+        logo_log.debug('------')
         await self.loop.create_task(presence.update_presence(self))
 
     async def on_ready(self):
@@ -98,16 +121,6 @@ class MyBot(commands.AutoShardedBot):
             except commands.ExtensionFailed as e:
                 traceback.print_exc()
                 logging.error(f'Failed to load extension {p.stem}: {e}\nFull error: {e.__cause__}')
-
-    @commands.Cog.listener()
-    async def on_command_error(self, ctx, error):
-        #await handle_command_error(self, ctx, error)
-        pass
-
-    @commands.Cog.listener()
-    async def on_application_command_error(self, interaction: discord.Interaction, error):
-        #await handle_application_command_error(self, interaction, error)
-        pass
 
 intent: discord.Intents = discord.Intents.all()
 bot = MyBot(command_prefix=command_prefix, intents=intent, help_command=None)

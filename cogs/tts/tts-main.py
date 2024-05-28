@@ -19,9 +19,10 @@ from discord.ext import commands
 from discord import app_commands
 from dotenv import load_dotenv
 
-from cogs.tts.user_setting import UserSettings
+from cogs.tts.user_setting import TTSUserSettingsCog
 from utils.join_message import join_message, leave_message
 from cogs.tts.global_dic import GlobalDicCog
+from utils.error import handle_command_error, handle_application_command_error
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %Y-%m-%d %H:%M:%S - %(message)s')
 
@@ -32,15 +33,14 @@ STATS_PATH = "data/tts/v00/stats"
 
 api_url = os.getenv('TTS_ISOTOPE_API_URL')
 
-class TTS(commands.Cog):
+class TTSMainCog(commands.Cog):
     def __init__(self, bot, user_settings):
         self.bot = bot
         self.user_settings = user_settings
-        self.voice_channel = None
-        self.currently_playing = False
-        self.queue = deque()
-        self.bot.loop.create_task(self.process_queue())
-        self.active_channel = None
+        self.voice_channels = {}
+        self.currently_playing = {}
+        self.queues = {}
+        self.active_channels = {}
         self.whitelist_file = "data/tts/v01/whitelist.json"
         self.whitelisted_users = self.load_whitelist()
         self.whitelisted_roles = self.load_whitelist_roles()
@@ -48,6 +48,7 @@ class TTS(commands.Cog):
         self.kakasi.setMode("K", "K")
         self.kakasi.setMode("J", "K")
         self.converter = self.kakasi.getConverter()
+        self.bot.tree.on_error = handle_application_command_error
 
         if not discord.opus.is_loaded():
             opus_path = None
@@ -123,34 +124,31 @@ class TTS(commands.Cog):
                     return True
         return False
 
-    async def process_queue(self):
+    async def process_queue(self, guild_id):
         while True:
-            if self.queue:
-                logging.debug(f"Queue size before processing: {len(self.queue)}")
-                message = self.queue.popleft()
+            if self.queues[guild_id]:
+                logging.debug(f"Queue size before processing: {len(self.queues[guild_id])}")
+                message = self.queues[guild_id].popleft()
                 logging.debug(f"Processing message: {message.content if isinstance(message, discord.Message) else message}")
                 await self.process_message(message)
-                logging.debug(f"Queue size after processing: {len(self.queue)}")
+                logging.debug(f"Queue size after processing: {len(self.queues[guild_id])}")
             await asyncio.sleep(1)
 
-    async def play_next_in_queue(self, item=None):
+    async def play_next_in_queue(self, guild_id, item=None):
         if item:
-            self.queue.append(item)
-            logging.debug(f"Added item to queue: {item}")
+            self.queues[guild_id].append(item)
         
-        if len(self.queue) > 0:
-            next_item = self.queue.popleft()
-            logging.debug(f"Playing next item in queue: {next_item}")
+        if len(self.queues[guild_id]) > 0:
+            next_item = self.queues[guild_id].popleft()
             if isinstance(next_item, str) and os.path.exists(next_item):
-                self.voice_channel.play(discord.FFmpegPCMAudio(next_item), after=lambda e: self.bot.loop.create_task(self.play_next_in_queue()))
-                self.currently_playing = True
+                self.voice_channels[guild_id].play(discord.FFmpegPCMAudio(next_item), after=lambda e: self.bot.loop.create_task(self.play_next_in_queue(guild_id)))
+                self.currently_playing[guild_id] = True
             elif isinstance(next_item, discord.Message):
                 await self.process_message(next_item)
             else:
-                logging.error("Queue item is neither a file path nor a message object.")
-                self.currently_playing = False
+                self.currently_playing[guild_id] = False
         else:
-            self.currently_playing = False
+            self.currently_playing[guild_id] = False
 
     def load_user_setting(self, user_id, voice_id, setting_name):
         setting_file = os.path.join(BASE_PATH, str(user_id), str(voice_id), f"{setting_name}.json")
@@ -168,8 +166,9 @@ class TTS(commands.Cog):
         return None
     
     async def leave_vc(self, ctx):
-        if self.voice_channel:
-            vc = self.voice_channel.channel
+        guild_id = ctx.guild.id
+        if guild_id in self.voice_channels:
+            vc = self.voice_channels[guild_id].channel
             logging.info(f"Attempting to disconnect from voice channel: {vc}")
             eff = discord.Embed(title="切断中", description=f"{vc} から切断します。")
             msgGG = await ctx.send(embed=eff)
@@ -180,13 +179,15 @@ class TTS(commands.Cog):
                 'temperature': 0
             }
             await leave_message(api_url, payload, ctx, self)
-            while self.voice_channel.is_playing():
+            while self.voice_channels[guild_id].is_playing():
                 logging.debug("Waiting for current playback to finish before disconnecting.")
                 await asyncio.sleep(1)
-            await self.voice_channel.disconnect(force=True)
+            await self.voice_channels[guild_id].disconnect(force=True)
             logging.info(f"Disconnected from voice channel: {vc}")
-            self.voice_channel = None
-            self.active_channel = None
+            del self.voice_channels[guild_id]
+            del self.active_channels[guild_id]
+            del self.queues[guild_id]
+            del self.currently_playing[guild_id]
             es = discord.Embed(title="切断しました", description=f"{vc} から切断しました。")
             await msgGG.edit(embed=es)
         else:
@@ -194,12 +195,17 @@ class TTS(commands.Cog):
             await ctx.send("現在接続しているボイスチャンネルがありません。")
 
     async def join_vc(self, ctx: commands.Context):
+        guild_id = ctx.guild.id
         if ctx.author.voice:
             vc = ctx.author.voice.channel
-            if self.voice_channel and self.voice_channel.channel == vc:
+            if guild_id in self.voice_channels and self.voice_channels[guild_id].channel == vc:
                 await ctx.send("すでにこのボイスチャンネルに接続しています。")
-                logging.warning("Attempted to join a voice channel that is already connected.")
                 return
+
+            self.voice_channels[guild_id] = await vc.connect()
+            self.active_channels[guild_id] = ctx.channel
+            self.queues[guild_id] = deque()
+            self.currently_playing[guild_id] = False
 
             logging.info(f"Joined voice channel: {vc.name}")
             ef = discord.Embed(title="接続中", description=f"{vc.name} に接続しています。")
@@ -210,8 +216,6 @@ class TTS(commands.Cog):
                 'text': join_msg,
                 'temperature': 0
             }
-            self.voice_channel = await vc.connect()
-            self.active_channel = ctx.channel
             self.bot.loop.create_task(join_message(api_url, payload, ctx, self))
             tts_api_url = api_url + 'api/v01/ping/'
             try:
@@ -227,7 +231,6 @@ class TTS(commands.Cog):
             except Exception as e:
                 tts_api_status = f"Failed to reach API: {e}"
 
-
             es = discord.Embed(title="接続しました", description=f"- 接続したボイスチャンネル: {vc.mention}\n\n- 接続状況: {tts_api_ping}ms")
             await msg_j.edit(embed=es)
             self.increment_stat("vc")
@@ -236,21 +239,27 @@ class TTS(commands.Cog):
             logging.warning("Attempted to join voice channel without being in a voice channel.")
 
     async def synthesize_and_play(self, message, channel=None, author=None):
-        self.queue.append(message)
+        guild_id = message.guild.id
+        self.queues[guild_id].append(message)
         logging.debug(f"Added message to queue: {message.content if isinstance(message, discord.Message) else message}")
         if message.channel:
             await message.channel.send("現在の読み上げをキューに追加しました。")
         logging.info("Added to queue.")
         
-        if not self.currently_playing:
-            await self.play_next_in_queue()
+        if not self.currently_playing[guild_id]:
+            await self.play_next_in_queue(guild_id)
 
     async def process_message(self, message):
         logging.info("process_message called")
         if isinstance(message, str):
-            user_id = None
-            voice_id = self.user_settings.load_user_voice(message.author.id)
-            text = message
+            if message.author:
+                user_id = message.author.id
+                voice_id = self.user_settings.load_user_voice(user_id)
+                text = message.content
+            else:
+                user_id = None
+                voice_id = "SEKAI"
+                text = message
         else:
             user_id = message.author.id
             voice_id = self.user_settings.load_user_voice(user_id)
@@ -300,10 +309,11 @@ class TTS(commands.Cog):
                                 tmp.write(dl_response.content)
 
                             if os.path.exists(tmp_path):
-                                self.queue.append(tmp_path)
+                                guild_id = message.guild.id
+                                self.queues[guild_id].append(tmp_path)
                                 logging.debug(f"Added synthesized audio to queue: {tmp_path}")
-                                if not self.currently_playing:
-                                    await self.play_next_in_queue()
+                                if not self.currently_playing[guild_id]:
+                                    await self.play_next_in_queue(guild_id)
                                 self.increment_stat("message")
                             else:
                                 logging.error(f"File not found: {tmp_path}")
@@ -360,6 +370,34 @@ class TTS(commands.Cog):
             await ctx.send("現在再生中の音声はありません。")
             logging.warning("Attempted to skip playback when nothing is playing.")
 
+    @commands.hybrid_command(name="stats", aliases=['st'], description="統計情報を表示します。")
+    async def stats(self, ctx):
+        e = discord.Embed(title="統計情報")
+        for stat_type, data in self.stats.items():
+            e.add_field(name=stat_type, value=data["count"], inline=False)
+        await ctx.send(embed=e)
+
+    @join.error
+    async def join_error(self, ctx, error):
+        if ctx.command_failed:
+            await handle_command_error(ctx, error)
+        else:
+            await handle_application_command_error(ctx, error)
+
+    @leave.error
+    async def leave_error(self, ctx, error):
+        if ctx.command_failed:
+            await handle_command_error(ctx, error)
+        else:
+            await handle_application_command_error(ctx, error)
+
+    @skip.error
+    async def skip_error(self, ctx, error):
+        if ctx.command_failed:
+            await handle_command_error(ctx, error)
+        else:
+            await handle_application_command_error(ctx, error)
+
     @commands.group(name="whitelist", aliases=['wl'], description="ホワイトリスト管理します。")
     async def whitelist(self, ctx):
         pass
@@ -394,7 +432,9 @@ class TTS(commands.Cog):
     @whitelist.command(name="add_role", aliases=['ar'], description="ロールをホワイトリストに追加します。")
     @app_commands.describe(role="ホワイトリストに追加するロール")
     @commands.is_owner()
-    async def add_role(self, ctx, role: discord.Role):
+    async def add_role(self, ctx, role: discord.Role or str):
+        if isinstance(role, str):
+            role = get(ctx.guild.roles, name=role)
         self.whitelisted_roles.add(role.id)
         self.save_whitelist_roles()
         await ctx.send(f"{role.name} ロールをホワイトリストに追加しました。")
@@ -429,8 +469,31 @@ class TTS(commands.Cog):
         else:
             await ctx.send("ホワイトリストに登録されているロールはありません。")
 
+    @whitelist.error
+    async def whitelist_error(self, ctx, error):
+        if ctx.command_failed:
+            await handle_command_error(ctx, error)
+        else:
+            await handle_application_command_error(ctx, error)
+
+    @add.error
+    async def add_error(self, ctx, error):
+        await handle_command_error(ctx, error)
+
+    @remove.error
+    async def remove_error(self, ctx, error):
+        await handle_command_error(ctx, error)
+
+    @add_role.error
+    async def add_role_error(self, ctx, error):
+        await handle_command_error(ctx, error)
+    
+    @remove_role.error
+    async def remove_role_error(self, ctx, error):
+        await handle_command_error(ctx, error)
+
     @commands.Cog.listener()
-    async def on_message(self, message):
+    async def on_message(self, message: discord.Message):
         if message.author == self.bot.user:
             return
 
@@ -440,67 +503,182 @@ class TTS(commands.Cog):
             return
 
         if isinstance(message.author, discord.Member):
-            if self.active_channel and message.channel == self.active_channel:
+            guild_id = message.guild.id
+            if guild_id in self.active_channels and message.channel == self.active_channels[guild_id]:
                 if message.author.voice and message.author.voice.channel:
-                    if not self.voice_channel or not self.voice_channel.is_connected():
-                        self.voice_channel = await message.author.voice.channel.connect()
-                    
-                    #logging.debug(f"Message content before processing: {message.content}")
+                    if guild_id not in self.voice_channels or not self.voice_channels[guild_id].is_connected():
+                        self.voice_channels[guild_id] = await message.author.voice.channel.connect()
 
-                    hiragana_dict = {
-                        "お兄ちゃん": "おにいちゃん",
-                    }
-
+                    global_dic_cog = GlobalDicCog(self.bot)
                     modified_message = message
-                    for word, hiragana in hiragana_dict.items():
-                        modified_message.content = modified_message.content.replace(word, hiragana)
 
-                    self.queue.append(modified_message)
-                    logging.debug(f"Added modified message to queue: {modified_message.content}")
+                    domain_list = await global_dic_cog.load_golodbal_url_dic()
+                    while re.search(r"http(s)?:\/\/([a-zA-Z0-9-]+\.)+[a-zA-Z0-9-]+(\/[a-zA-Z0-9-./?%&=~]*)?", modified_message.content):
+                        url = re.search(r"http(s)?:\/\/([a-zA-Z0-9-]+\.)+[a-zA-Z0-9-]+(\/[a-zA-Z0-9-./?%&=~]*)?", modified_message.content).group()
+                        domain = f"{url[0].replace('https://', '').replace('http://', '').split('/')[0]}"
+                        print(domain)
+                        if domain.endswith('.'):
+                            domain = domain[:-1]
+                        domainHit = False
+                        for dict_domain, dict_hiragana in domain_list.items(): # {"test.com": "てすとどっとこむ"}
+                            if domain.endswith(dict_domain): # "sub.test.com" == "test.com" -> False
+                                modified_message.content = modified_message.content.replace(url, dict_hiragana)
+                                domainHit = True
+                                break
+                        if not domainHit:
+                            modified_message.content = modified_message.content.replace(url, "URL省略")
+
+                    text_dict = await global_dic_cog.load_golodbal_text_dic()
+                    if text_dict:
+                        for word, hiragana in text_dict.items():
+                            modified_message.content = modified_message.content.replace(word, hiragana)
 
                     if message.attachments:
+                        msg_ = message.content if message.content else ""
                         for attachment in message.attachments:
-                            modified_message = message
-                            modified_message.content = "添付ファイル"
-                            self.queue.append(modified_message)
-                            logging.debug(f"Added attachment message to queue: {modified_message.content}")
+                            audio_file_dic = {
+                                "mp3": "エムピースリー",
+                                "wav": "ワブ",
+                                "m4a": "エムフォーエー",
+                                "mp4": "エムピースフォー",
+                                "mov": "エムオーブイ",
+                                "webm": "ウェブエム",
+                            }
+                            img_file_dic = {
+                                "png": "ピング",
+                                "jpg": "ジェイペグ",
+                                "jpeg": "ジェイペグ",
+                                "gif": "ジフ",
+                                "svg": "ベクター",
+                                "webp": "ウェブピー",
+                                "bmp": "ビットマップ",
+                            }
+                            code_file_dic = {
+                                "py": "パイソン",
+                                "js": "ジャバスクリプト",
+                                "ts": "タイプスクリプト",
+                                "html": "エイチティーエムエル",
+                                "css": "シーエスエス",
+                                "json": "ジェイソン",
+                                "yaml": "ヤムル",
+                                "yml": "ヤムル",
+                                "toml": "トムル",
+                                "xml": "エックスエムエル",
+                                "ini": "アイエヌアイ",
+                                "log": "ログ",
+                                "sh": "シェル",
+                                "bash": "バッシュ",
+                                "bat": "バッチ",
+                                "cmd": "コマンド",
+                                "ps1": "パワーシェル",
+                                "c": "シー",
+                                "h": "エイチ",
+                                "cpp": "シープラスプラス",
+                                "hpp": "エイチプラスプラス",
+                                "cs": "シーシャープ",
+                                "java": "ジャバ",
+                                "lisp": "リスプ",
+                                "swift": "スウィフト",
+                                "dart": "ダート",
+                                "go": "ゴー",
+                                "rs": "ラスト",
+                                "rb": "ルビー",
+                                "php": "ピーエイチピー",
+                                "lua": "ルア",
+                                "perl": "パール",
+                                "pl": "パール",
+                                "sql": "エスキューエル",
+                                "tsql": "ティーエスキューエル",
+                                "mysql": "マイエスキューエル",
+                                "pgsql": "ピージーエスキューエル",
+                                "sqlite": "スキューライト",
+                                "gradle": "グレードル",
+                                "conf": "コンフィグ",
+                                "cfg": "コンフィグ",
+                            }
+                            doc_file_dic = {
+                                "txt": "テキスト",
+                                "pdf": "ピーディーエフ",
+                                "doc": "ワード",
+                                "docx": "ワード",
+                                "docm": "ワード",
+                                "ppt": "パワーポイント",
+                                "pptx": "パワーポイント",
+                                "pptm": "パワーポイント",
+                                "xls": "エクセル",
+                                "xlsx": "エクセル",
+                                "xlsm": "エクセル",
+                                "csv": "シーレスブイ",
+                                "rtf": "アールティーエフ",
+                                "md": "マークダウン",
+                                "bin": "バイナリ",
+                                "exe": "ウィンドウズアプリ",
+                                "jar": "ジャー",
+                                "apk": "アンドロイドアプリ",
+                                "ipa": "アイオーエスアプリ",
+                                "deb": "デビアン",
+                                "rpm": "アールピーエム",
+                                "zip": "ジップ",
+                                "rar": "ラー",
+                                "tar": "ター",
+                                "gz": "ジージップ",
+                                "7z": "セブンジップ",
+                                "bz2": "ビージップツー",
+                                "xz": "エックスジップ",
+                                "iso": "アイエスオー",
+                                "img": "イメージ",
+                                "vhd": "バーチャルハードディスク",
+                                "vhdx": "バーチャルハードディスク",
+                                "vmdk": "バーチャルマシンディスク",
+                                "dmg": "ディーエムジー",
+                                "pkg": "パッケージ",
+                                "crt": "ショウメイショ",
+                                "key": "キー",
+                                "pem": "ピーイーエム",
+                            }
+                            full_filename_dic = {
+                                "dockerfile": "ドッカーファイル",
+                                "makefile": "メイクファイル",
+                                ".gitignore": "ギットイグノア",
+                                ".gitattributes": "ギットアトリビュート",
+                                "LICENSE": "ライセンス",
+                            }
+                            filename: str = attachment.filename.lower()
+                            if filename.endswith(audio_file_dic.keys()):
+                                attachment_type = audio_file_dic[filename.split('.')[-1]]
+                            elif filename.endswith(img_file_dic.keys()):
+                                attachment_type = img_file_dic[filename.split('.')[-1]]
+                            elif filename.endswith(code_file_dic.keys()):
+                                attachment_type = code_file_dic[filename.split('.')[-1]]
+                            elif filename.endswith(doc_file_dic.keys()):
+                                attachment_type = doc_file_dic[filename.split('.')[-1]]
+                            elif filename in full_filename_dic.keys():
+                                attachment_type = full_filename_dic[filename]
+                            else:
+                                attachment_type = "ファイル"
 
-                    if message.content.startswith("```") or message.content.startswith("`"):
-                        modified_message = message
-                        modified_message.content = "コードブロック"
-                        self.queue.append(modified_message)
-                        logging.debug(f"Added code block message to queue: {modified_message.content}")
+                            if msg_ == "":
+                                modified_message.content = f"{attachment_type}が添付されました"
+                            else:
+                                modified_message.content = f"{msg_}と{attachment_type}ファイルが添付されました"
 
-                        """if message.content.startswith("http") or message.content.startswith("https"):
-                            global_dic_cog = GlobalDicCog(self.bot)
-                            domain_list = await global_dic_cog.load_golodbal_url_dic()
+                    while re.search(r'`{3}[^\n`]*\n([^`]|\n)*`{3}', modified_message.content):
+                        codeBlock = re.search(r'`{3}[^\n`]*\n([^`]|\n)*`{3}', modified_message.content).group()
+                        modified_message.content = modified_message.content.replace(codeBlock, "コードブロック")
+                    while re.search(r'`{1}[^`]*`{1}', modified_message.content):
+                        codeBlock = re.search(r'`{1}[^`]*`{1}', modified_message.content).group()
+                        modified_message.content = modified_message.content.replace(codeBlock, "コードブロック")
 
-                            for domain in domain_list.keys():
-                                if re.search(domain, message.content):
-                                    read_text = domain_list[domain]
+                    self.queues[guild_id].append(modified_message)
+                    logging.debug(f"Added modified message to queue: {modified_message.content}")
 
-
-                                    modified_message = message
-                                    modified_message.content = read_text
-                                    self.queue.append(modified_message)
-                                    break"""
-                            
-                    if any(url in message.content for url in ["http://", "https://"]):
-                        modified_message = message
-                        modified_message.content = "URL省略"
-                        self.queue.append(modified_message)
-                    
-                    #logging.debug(f"Message content after processing: {message.content}")
-
-                    if not self.currently_playing:
-                        await self.play_next_in_queue()
-                    else:
-                        self.queue.append(message)
+                    if not self.currently_playing[guild_id]:
+                        await self.play_next_in_queue(guild_id)
                 else:
                     await message.channel.send("ボイスチャンネルに接続している必要があります。")
             else:
                 pass
 
 async def setup(bot):
-    user_settings = UserSettings(bot)
-    await bot.add_cog(TTS(bot, user_settings))
+    user_settings = TTSUserSettingsCog(bot)
+    await bot.add_cog(TTSMainCog(bot, user_settings))

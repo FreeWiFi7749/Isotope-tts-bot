@@ -9,13 +9,14 @@ load_dotenv()
 
 api_url = os.getenv('TTS_ISOTOPE_API_URL')
 
-class TTSStory(commands.Cog):
+class TTSStoryCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
     @commands.hybrid_command(name="gs")
     @commands.is_owner()
     async def generate_story(self, ctx):
+        
         async with httpx.AsyncClient() as client:
             first_msg = await ctx.send("ストーリーを生成しています。しばらくお待ちください。")
             response = await client.post(f"{api_url}api/v01/generate_speech/gpt/story/")
@@ -42,6 +43,10 @@ class TTSStory(commands.Cog):
                 await asyncio.sleep(1)
             await vc.disconnect()
 
-async def setup(bot):
-    await bot.add_cog(TTSStory(bot))
+    @generate_story.error
+    async def generate_story_error(self, ctx, error):
+        if isinstance(error, commands.NotOwner):
+            await ctx.send("このコマンドを使用する権限がありません。", ephemeral=True)
 
+async def setup(bot):
+    await bot.add_cog(TTSStoryCog(bot))

@@ -4,13 +4,16 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 
+from utils.error import handle_command_error, handle_application_command_error
+
 BASE_PATH = "data/tts/v00/user-data"
 VOICE_DATA_PATH = "data/tts/v01/voice-data"
 
-class UserSettings(commands.Cog):
+class TTSUserSettingsCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.voice_data = self.load_voice_data()
+        self.bot.tree.on_error = handle_application_command_error
 
     def save_user_setting(self, user_id, voice_id, setting_name, value):
         if not os.path.exists(BASE_PATH):
@@ -101,5 +104,33 @@ class UserSettings(commands.Cog):
         e.set_author(name="Powered by VOICEPEAK")
         await ctx.send(embed=e)
 
+    @voices.error
+    async def voices_error(self, ctx, error):
+        if ctx.command_failed:
+            await handle_command_error(self.bot, ctx, error)
+        else:
+            await handle_application_command_error(self.bot, ctx, error)
+
+    @set_speed.error
+    async def set_speed_error(self, ctx, error):
+        if ctx.command_failed:
+            await handle_command_error(self.bot, ctx, error)
+        else:
+            await handle_application_command_error(self.bot, ctx, error)
+
+    @set_pitch.error
+    async def set_pitch_error(self, ctx, error):
+        if ctx.command_failed:
+            await handle_command_error(self.bot, ctx, error)
+        else:
+            await handle_application_command_error(self.bot, ctx, error)
+
+    @set_voice.error
+    async def set_voice_error(self, ctx, error):
+        if ctx.command_failed:
+            await handle_command_error(self.bot, ctx, error)
+        else:
+            await handle_application_command_error(self.bot, ctx, error)
+
 async def setup(bot):
-    await bot.add_cog(UserSettings(bot))
+    await bot.add_cog(TTSUserSettingsCog(bot))

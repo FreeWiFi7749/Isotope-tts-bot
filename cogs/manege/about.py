@@ -82,7 +82,7 @@ class AboutCog(commands.Cog):
         error_stats = self.load_stats("error.json")
         eb = discord.Embed(
             title="K+AIWA",
-            description="トーク特化ライブラリであるVOICEPEAKの「裏命」や「星界」など、「KAMITSUBAKI STUDIO 音楽的同位体」の音声波形を用いた読み上げBotです。\n現在利用可能な音声波形は以下の通りです：\n-	SEKAI\n-	COKO\n-	RIME\n-	HARU\n\n使用している音声波形：[音楽的同位体](https://musical-isotope.kamitsubaki.jp/)",
+            description="CeVIO AI 『音楽的同位体 星界(SEKAI)、裏命(RIME)、狐子(COKO)、羽累(HARU)』の音声波形を用いた読み上げBot「K+AIWA(カイワ)」です。\n現在利用可能な音声波形は以下の通りです：\n-	SEKAI\n-	COKO\n-	RIME\n-	HARU\n\n使用している音声波形：[音楽的同位体](https://musical-isotope.kamitsubaki.jp/)",
             color=discord.Color.from_rgb(255, 255, 255))
         eb.add_field(name="スタッツ", value=f"合計VC接続数: {vc_stats['count']}\n合計読み上げメッセージ数: {message_stats['count']}\n合計エラー数: {error_stats['count']}", inline=False)
         try:

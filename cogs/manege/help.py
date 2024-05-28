@@ -222,7 +222,11 @@ class HelpCog(commands.Cog):
         try:
             self.help_command_id = int(help_command_id_env)
         except ValueError:
-            self.help_command_id = 1232610580628635719
+            self.help_command_id = 1244175490571436125
+
+    @commands.command(name="help", description="ヘルプを表示します")
+    async def help_s(self, ctx):
+        await ctx.send("</help:1244175490571436125>をクリックしてヘルプを表示してください。")
 
     @app_commands.command(name="help", description="ヘルプを表示します")
     @app_commands.describe(option="ヘルプを表示するカテゴリ名")
