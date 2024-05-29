@@ -168,7 +168,7 @@ class HelpSelect(Select):
 
         if selected_value == "home":
             e = discord.Embed(title='ヘルプ', colour=color, timestamp=now)
-            e.add_field(name='読み上げコマンド', value='</join:1244173077823225886>\n</leave:1244173077823225887>\n</skip:1244173077823225888>', inline=False)
+            e.add_field(name='読み上げコマンド', value='</join:1244780272872984636>\n</leave:1244780272872984637>\n</skip:1244780272872984638>', inline=False)
             e.add_field(name='設定コマンド', value='</user setting voice:1243077141332230226>\n</user setting speed:1243077141332230226>\n</user setting pitch:1243077141332230226>', inline=False)
             e.add_field(name='Aboutコマンド', value='</about bot:1243804233627729950>\n</about api:1243804233627729950>\n</about voices:1243804233627729950>', inline=False)
             e.set_footer(text="ヘルプメニュー")
@@ -177,9 +177,9 @@ class HelpSelect(Select):
 
         elif selected_value == "tts":
             e = discord.Embed(title='読み上げコマンド', colour=color, timestamp=now)
-            e.add_field(name='/join', value='ボイスチャンネルに接続します。\n> </join:1244173077823225886>を使ってみる', inline=False)
-            e.add_field(name='/leave', value='ボイスチャンネルから切断します。\n> </leave:1244173077823225887>を使ってみる', inline=False)
-            e.add_field(name='/skip', value='現在の読み上げをスキップします。\n> </skip:1244173077823225888>を使ってみる', inline=False)
+            e.add_field(name='/join', value='ボイスチャンネルに接続します。\n> </join:1244780272872984636>を使ってみる', inline=False)
+            e.add_field(name='/leave', value='ボイスチャンネルから切断します。\n> </leave:1244780272872984637>を使ってみる', inline=False)
+            e.add_field(name='/skip', value='現在の読み上げをスキップします。\n> </skip:1244780272872984638>を使ってみる', inline=False)
             e.set_footer(text="読み上げコマンドの説明")
             e.set_thumbnail(url=interaction.client.user.avatar.url)
             e.set_author(name=f"{interaction.client.user.name}のヘルプ", icon_url=interaction.client.user.avatar.url)
@@ -247,7 +247,7 @@ class HelpCog(commands.Cog):
             else:
                 color = discord.Color.blurple()
             e = discord.Embed(title='ヘルプ', colour=color, timestamp=now)
-            e.add_field(name='読み上げコマンド', value='</join:1244173077823225886>\n</leave:1244173077823225887>\n</skip:1244173077823225888>', inline=False)
+            e.add_field(name='読み上げコマンド', value='</join:1244780272872984636>\n</leave:1244780272872984637>\n</skip:1244780272872984638>', inline=False)
             e.add_field(name='設定コマンド', value='</user setting voice:1243077141332230226>\n</user setting speed:1243077141332230226>\n</user setting pitch:1243077141332230226>', inline=False)
             e.add_field(name='Aboutコマンド', value='</about bot:1243804233627729950>\n</about api:1243804233627729950>\n</about voices:1243804233627729950>', inline=False)
             e.set_footer(text="ヘルプメニュー")
@@ -278,9 +278,9 @@ class HelpCog(commands.Cog):
 
             elif selected_value == "tts":
                 e = discord.Embed(title='読み上げコマンド', colour=color, timestamp=now)
-                e.add_field(name='/join', value='ボイスチャンネルに接続します。\n> </join:1244173077823225886>を使ってみる', inline=False)
-                e.add_field(name='/leave', value='ボイスチャンネルから切断します。\n> </leave:1244173077823225887>を使ってみる', inline=False)
-                e.add_field(name='/skip', value='現在の読み上げをスキップします。\n> </skip:1244173077823225888>を使ってみる', inline=False)
+                e.add_field(name='/join', value='ボイスチャンネルに接続します。\n> </join:1244780272872984636>を使ってみる', inline=False)
+                e.add_field(name='/leave', value='ボイスチャンネルから切断します。\n> </leave:1244780272872984637>を使ってみる', inline=False)
+                e.add_field(name='/skip', value='現在の読み上げをスキップします。\n> </skip:1244780272872984638>を使ってみる', inline=False)
                 e.set_footer(text="読み上げコマンドの説明")
                 e.set_thumbnail(url=interaction.client.user.avatar.url)
                 e.set_author(name=f"{interaction.client.user.name}のヘルプ", icon_url=interaction.client.user.avatar.url)

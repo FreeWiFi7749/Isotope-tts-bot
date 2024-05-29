@@ -23,7 +23,7 @@ def load_stats(filename):
 
 presences = [
     {"type": "Playing", "name": "BOT情報を更新中...", "state": "", "status": "online"},
-    {"type": "Playing", "name": "TTS情報を更新中...", "state": "", "status": "online"},
+    {"type": "Playing", "name": "TTS情報を更新中...", "state": "", "status": "online"}
 ]
 
 async def update_presence(bot):
@@ -74,5 +74,4 @@ async def update_presence(bot):
 
         index = (index + 1) % len(presences)
         if index == len(presences):
-            index = 0
             index = 0
