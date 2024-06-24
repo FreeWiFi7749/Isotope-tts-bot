@@ -1,4 +1,3 @@
-import discord
 from discord.ext import commands
 import json
 import os
@@ -37,7 +36,8 @@ class AutoSendVCLinkCog(commands.Cog):
         if message.content.endswith('!sl'):
             if message.author.voice and message.author.voice.channel:
                 vc_url = f"https://discord.com/channels/{message.guild.id}/{message.author.voice.channel.id}"
-                await message.channel.send(vc_url)
+                av_msg = f"[{message.author.mention}のVC]({vc_url})"
+                await message.channel.send(av_msg)
             else:
                 pass
 

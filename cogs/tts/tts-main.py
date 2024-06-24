@@ -23,6 +23,7 @@ from cogs.tts.user_setting import TTSUserSettingsCog
 from utils.join_message import join_message, leave_message
 from cogs.tts.global_dic import GlobalDicCog
 from utils.error import handle_command_error, handle_application_command_error
+from cogs.tts.rp import RichPresence
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %Y-%m-%d %H:%M:%S - %(message)s')
 
@@ -190,11 +191,21 @@ class TTSMainCog(commands.Cog):
             del self.currently_playing[guild_id]
             es = discord.Embed(title="切断しました", description=f"{vc} から切断しました。")
             await msgGG.edit(embed=es)
+
+            # リッチプレゼンスをクリア
+            rich_presence = self.bot.get_cog("RichPresence")
+            if rich_presence:
+                for member in vc.members:
+                    await rich_presence.clear_presence(member.id)
         else:
             logging.warning("No voice channel to disconnect from.")
             await ctx.send("現在接続しているボイスチャンネルがありません。")
 
     async def join_vc(self, ctx: commands.Context):
+        if ctx.guild is None:
+            await ctx.send("このコマンドはサーバー内でのみ使用できます。")
+            return
+
         guild_id = ctx.guild.id
         if ctx.author.voice:
             vc = ctx.author.voice.channel
@@ -202,7 +213,7 @@ class TTSMainCog(commands.Cog):
                 await ctx.send("すでにこのボイスチャンネルに接続しています。")
                 return
 
-            self.voice_channels[guild_id] = await vc.connect()
+            self.voice_channels[guild_id] = await vc.connect(self_deaf=True)
             self.active_channels[guild_id] = ctx.channel
             self.queues[guild_id] = deque()
             self.currently_playing[guild_id] = False
@@ -234,6 +245,11 @@ class TTSMainCog(commands.Cog):
             es = discord.Embed(title="接続しました", description=f"- 接続したボイスチャンネル: {vc.mention}\n\n- 接続状況: {tts_api_ping}ms")
             await msg_j.edit(embed=es)
             self.increment_stat("vc")
+
+            rich_presence = self.bot.get_cog("RichPresence")
+            if rich_presence:
+                for member in vc.members:
+                    await rich_presence.update_presence(member.id, vc_member_count=len(vc.members))
         else:
             await ctx.send("ボイスチャンネルに接続している必要があります。")
             logging.warning("Attempted to join voice channel without being in a voice channel.")
@@ -675,7 +691,7 @@ class TTSMainCog(commands.Cog):
                     if not self.currently_playing[guild_id]:
                         await self.play_next_in_queue(guild_id)
                 else:
-                    await message.channel.send("ボイスチャンネルに接続している必要があります。")
+                    pass
             else:
                 pass
 

@@ -10,6 +10,9 @@ import logging
 import traceback
 import sys
 import colorlog
+import websockets
+import json
+import asyncio
 
 from utils import presence
 from utils.logging import save_log
@@ -80,7 +83,7 @@ class MyBot(commands.AutoShardedBot):
         logo_log.debug("└──────────────────────────────────────────────────────────────────────────┘")
 
     async def setup_hook(self):
-        self.loop.create_task(self.after_ready())
+        self.loop.create_task(self.after_ready()) # WebSocketクライアントを起動
 
     async def after_ready(self):
         logo_log = logging.getLogger('logo')
