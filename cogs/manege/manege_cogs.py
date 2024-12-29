@@ -41,6 +41,13 @@ class ManagementCog(commands.Cog):
             return await ManagementCog.is_owner_interaction_check(interaction)
         return app_commands.check(predicate)
 
+    @commands.Cog.listener()
+    async def handle_application_command_error(self, interaction: discord.Interaction, error: Exception):
+        if isinstance(error, app_commands.errors.CheckFailure):
+            await interaction.response.send_message("このコマンドを実行する権限がありません。", ephemeral=True)
+        else:
+            await interaction.response.send_message(f"エラーが発生しました: {str(error)}", ephemeral=True)
+
     @app_commands.command(name="reload", description="指定したcogを再読み込みします")
     @app_commands.describe(cog="再読み込みするcogの名前")
     @app_commands.autocomplete(cog=cog_autocomplete)

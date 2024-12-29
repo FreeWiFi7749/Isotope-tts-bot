@@ -78,7 +78,7 @@ class MyBot(commands.AutoShardedBot):
         logo_log.debug("├──────────────────────────────────────────────────────────────────────────│")
         logo_log.debug("│                        Authors: FreeWiFi                                 │")
         logo_log.debug("├──────────────────────────────────────────────────────────────────────────│")
-        logo_log.debug("│                         discord.py: v%s                              |", discord.__version__)
+        logo_log.debug("│                         discord.py: v%s                               |", discord.__version__)
         logo_log.debug("│                           Python: v%s                                |", '.'.join(map(str, sys.version_info[:3])))
         logo_log.debug("└──────────────────────────────────────────────────────────────────────────┘")
 

@@ -25,10 +25,10 @@ class RichPresence(commands.Cog):
         config_path = f'data/tts/rp/{user_id}/config.json'
         if os.path.isfile(config_path):
             with open(config_path, 'r') as f:
-                logging.info(f"Loading config for user {user_id} from {config_path}.")
+                # logging.info(f"Loading config for user {user_id} from {config_path}.")
                 return json.load(f)
         else:
-            logging.warning(f"No config found for user {user_id}. Using default config.")
+            # logging.warning(f"No config found for user {user_id}. Using default config.")
             return {'client_id': None, 'enabled': False}
 
     def save_config(self, user_id, config):
@@ -36,32 +36,33 @@ class RichPresence(commands.Cog):
         os.makedirs(os.path.dirname(config_path), exist_ok=True)
         with open(config_path, 'w') as f:
             json.dump(config, f)
-        logging.info(f"Config for user {user_id} saved to {config_path}.")
+        #logging.info(f"Config for user {user_id} saved to {config_path}.")
 
     def load_rp(self, user_id):
         rp_path = f'data/tts/rp/{user_id}/rp.json'
         if os.path.isfile(rp_path):
             with open(rp_path, 'r') as f:
-                logging.info(f"Loading Rich Presence data for user {user_id} from {rp_path}.")
+                # logging.info(f"Loading Rich Presence data for user {user_id} from {rp_path}.")
                 return json.load(f)
         else:
-            logging.warning(f"No Rich Presence data found for user {user_id}. Using default data.")
+            # logging.warning(f"No Rich Presence data found for user {user_id}. Using default data.")
             return {}
 
     def save_rp(self, user_id, rp_data):
         rp_path = f'data/tts/rp/{user_id}/rp.json'
         os.makedirs(os.path.dirname(rp_path), exist_ok=True)
         with open(rp_path, 'w') as f:
-            json.dump(rp_data, f)
-        logging.info(f"Rich Presence data for user {user_id} saved to {rp_path}.")
+            # json.dump(rp_data, f)
+            json.dump(rp_data, f, indent=4)
+        # logging.info(f"Rich Presence data for user {user_id} saved to {rp_path}.")
 
     def get_image_key(self, image_name):
         image_path = os.path.join(self.asset_dir, image_name)
         if os.path.isfile(image_path):
-            logging.info(f"Image {image_path} found.")
+            # logging.info(f"Image {image_path} found.")
             return image_path
         else:
-            logging.warning(f"Image {image_path} not found. Using default.")
+            # logging.warning(f"Image {image_path} not found. Using default.")
             return os.path.join(self.asset_dir, self.default_images['small_image'])
 
     async def connect_rpc(self, user_id, client_id, retries=3):
@@ -71,38 +72,38 @@ class RichPresence(commands.Cog):
                 try:
                     await self.bot.loop.run_in_executor(None, rpc.connect)
                     self.user_rpc[user_id] = rpc
-                    logging.info(f"Connected to Rich Presence for user {user_id} with client ID {client_id}.")
+                    # logging.info(f"Connected to Rich Presence for user {user_id} with client ID {client_id}.")
                     return self.user_rpc[user_id]
                 except ConnectionRefusedError as e:
-                    logging.error(f"Connection to Rich Presence for user {user_id} with client ID {client_id} was refused. Attempt {attempt + 1} of {retries}. Error: {e}")
+                    # logging.error(f"Connection to Rich Presence for user {user_id} with client ID {client_id} was refused. Attempt {attempt + 1} of {retries}. Error: {e}")
                     if attempt < retries - 1:
                         await asyncio.sleep(2)  # 再試行前に少し待つ
                     else:
-                        logging.error(f"Failed to connect to Rich Presence for user {user_id} after {retries} attempts.")
+                        # logging.error(f"Failed to connect to Rich Presence for user {user_id} after {retries} attempts.")
                         return None
                 except Exception as e:
-                    logging.error(f"Unexpected error occurred while connecting to Rich Presence for user {user_id}: {e}")
+                    # logging.error(f"Unexpected error occurred while connecting to Rich Presence for user {user_id}: {e}")
                     return None
         return self.user_rpc[user_id]
 
     async def update_presence(self, user_id, small_image_key=None, vc_member_count=None):
         if user_id != self.owner_id:
-            logging.info(f"Rich Presence update ignored for user {user_id}. Only owner is allowed.")
+            # logging.info(f"Rich Presence update ignored for user {user_id}. Only owner is allowed.")
             return
 
         config = self.load_config(user_id)
         if not config.get('enabled'):
-            logging.info(f"Rich Presence for user {user_id} is disabled.")
+            # logging.info(f"Rich Presence for user {user_id} is disabled.")
             return
 
         client_id = config.get('client_id')
         if not client_id:
-            logging.error(f"No client ID found for user {user_id}.")
+            # logging.error(f"No client ID found for user {user_id}.")
             return
 
         rpc = await self.connect_rpc(user_id, client_id)
         if rpc is None:
-            logging.error(f"Failed to connect to Rich Presence for user {user_id}.")
+            # logging.error(f"Failed to connect to Rich Presence for user {user_id}.")
             return
         
         user_voice = TTSUserSettingsCog.load_user_voice(self, user_id).lower()
@@ -149,13 +150,13 @@ class RichPresence(commands.Cog):
             'party_size': [vc_member_count if vc_member_count is not None else 1, 99],
         }
         self.save_rp(user_id, rp_data)
-        logging.info(f"Rich Presence updated for user {user_id}!")
+        # logging.info(f"Rich Presence updated for user {user_id}!")
 
     @commands.hybrid_group()
     async def rp(self, ctx):
         if ctx.invoked_subcommand is None:
             await ctx.send('Invalid RP command passed...')
-            logging.warning("Invalid RP command passed.")
+            # logging.warning("Invalid RP command passed.")
 
     @rp.command()
     async def set_client_id(self, ctx, client_id: str):
@@ -168,13 +169,13 @@ class RichPresence(commands.Cog):
         config['enabled'] = True
         self.save_config(user_id, config)
         await ctx.send(f"Client ID set and Rich Presence enabled for user {user_id}!")
-        logging.info(f"Client ID set and Rich Presence enabled for user {user_id}.")
+        # logging.info(f"Client ID set and Rich Presence enabled for user {user_id}.")
 
     @rp.command()
     async def set_presence(self, ctx, small_image_key: str = None):
         await self.update_presence(ctx.author.id, small_image_key)
         await ctx.send(f"Rich Presence updated for user {ctx.author.id}!")
-        logging.info(f"Rich Presence updated for user {ctx.author.id}.")
+        # logging.info(f"Rich Presence updated for user {ctx.author.id}.")
 
     @tasks.loop(minutes=1)
     async def presence_update_task(self):
@@ -184,24 +185,24 @@ class RichPresence(commands.Cog):
                 continue
 
             guild = self.bot.get_guild(self.bot.guilds[0].id)
-            logging.info(f"Guild: {guild}")
+            # logging.info(f"Guild: {guild}")
             member = guild.get_member(user_id)
-            logging.info(f"Member: {member}")
+            # logging.info(f"Member: {member}")
             if member and member.voice and member.voice.channel:
                 vc_member_count = len(member.voice.channel.members)
-                logging.info(f"VC Member Count: {vc_member_count}")
+                # logging.info(f"VC Member Count: {vc_member_count}")
             else:
                 vc_member_count = None
 
             small_image_key = self.default_images['small_image']
-            logging.info(f"Small Image Key: {small_image_key}")
+            # logging.info(f"Small Image Key: {small_image_key}")
             await self.update_presence(user_id, small_image_key, vc_member_count)
-            logging.info(f"Presence updated for user {user_id}.")
+            # logging.info(f"Presence updated for user {user_id}.")
 
     @presence_update_task.before_loop
     async def before_presence_update_task(self):
         await self.bot.wait_until_ready()
-        logging.info("Presence update task is starting.")
+        # logging.info("Presence update task is starting.")
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
@@ -219,8 +220,8 @@ class RichPresence(commands.Cog):
 
             small_image_key = self.default_images['small_image']
             await self.update_presence(user_id, small_image_key, vc_member_count)
-            logging.info(f"Presence updated for user {user_id} due to voice state change.")
+            # logging.info(f"Presence updated for user {user_id} due to voice state change.")
 
 async def setup(bot):
     await bot.add_cog(RichPresence(bot))
-    logging.info("RichPresence cog setup complete.")
+    # logging.info("RichPresence cog setup complete.")
